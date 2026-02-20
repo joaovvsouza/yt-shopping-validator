@@ -45,7 +45,7 @@ async function getBrowser(): Promise<Browser> {
     ].filter(Boolean) as string[];
 
     const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
-      headless: true,
+      headless: "new",
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
