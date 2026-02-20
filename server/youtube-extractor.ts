@@ -42,7 +42,7 @@ async function getBrowser(): Promise<Browser> {
         '--disable-gpu',
         '--single-process',
       ],
-      timeout: 60000, // 60 seconds to launch
+      timeout: 60000,
     };
 
     try {

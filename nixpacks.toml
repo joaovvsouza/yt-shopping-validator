@@ -1,5 +1,8 @@
+[phases.setup]
+nixPkgs = ["chromium"]
+
 [phases.install]
-cmds = ["pnpm install"]
+cmds = ["pnpm install", "npx puppeteer browsers install chrome"]
 
 [phases.build]
 cmds = ["pnpm build"]
