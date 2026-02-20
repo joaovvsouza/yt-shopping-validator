@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer';
 import type { Browser } from 'puppeteer';
+import fs from 'fs';
 
 interface YouTubeProduct {
   title: string;
@@ -45,6 +46,29 @@ async function getBrowser(): Promise<Browser> {
       timeout: 60000,
     };
 
+    // In development, try to use system Chrome if Puppeteer's bundled Chrome is not available
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    if (isDevelopment) {
+      const systemChromePaths = [
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+      ];
+
+      for (const path of systemChromePaths) {
+        try {
+          if (fs.existsSync(path)) {
+            launchOptions.executablePath = path;
+            console.log(`[Puppeteer] Using system Chrome at: ${path}`);
+            break;
+          }
+        } catch {
+          // Continue to next path
+        }
+      }
+    }
+
     try {
       browser = await puppeteer.launch(launchOptions);
       
@@ -57,6 +81,11 @@ async function getBrowser(): Promise<Browser> {
     } catch (error) {
       console.error('[Puppeteer] Failed to launch browser:', error);
       console.error('[Puppeteer] Launch options:', JSON.stringify(launchOptions, null, 2));
+      
+      if (isDevelopment) {
+        console.error('[Puppeteer] TIP: Install Chrome or run: npx puppeteer browsers install chrome');
+      }
+      
       throw new Error(`Não foi possível iniciar o navegador. Verifique se Chrome/Chromium está instalado.`);
     }
   }
