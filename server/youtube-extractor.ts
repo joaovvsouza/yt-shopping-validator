@@ -34,34 +34,12 @@ async function getBrowser(): Promise<Browser> {
   }
 
   if (!browser) {
-    // Define Chromium executable path with fallback order
-    // Priority: CHROMIUM_PATH env var > Railway Nix path > system paths
-    const chromiumPaths = [
-      process.env.CHROMIUM_PATH,
-      '/run/current-system/sw/bin/chromium',
-      '/usr/bin/chromium-browser',
-      '/usr/bin/chromium',
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    ].filter(Boolean) as string[];
-
-    // Find the first existing Chromium executable
-    let executablePath: string | undefined;
-    for (const path of chromiumPaths) {
-      try {
-        if (fs.existsSync(path)) {
-          executablePath = path;
-          console.log(`[Puppeteer] Found Chromium at: ${path}`);
-          break;
-        }
-      } catch {
-        // Continue to next path
-      }
-    }
+    // Use PUPPETEER_EXECUTABLE_PATH from Railway or fallback to Nix path
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/run/current-system/sw/bin/chromium';
+    
+    console.log(`[Puppeteer] Using executable path: ${executablePath}`);
 
     const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
-      headless: true,
       executablePath: executablePath,
       args: [
         '--no-sandbox',
@@ -70,12 +48,9 @@ async function getBrowser(): Promise<Browser> {
         '--disable-gpu',
         '--single-process',
       ],
+      headless: true,
       timeout: 60000, // 60 seconds to launch
     };
-
-    if (!executablePath) {
-      console.warn('[Puppeteer] No Chromium executable found, Puppeteer will try to use bundled Chromium');
-    }
 
     try {
       browser = await puppeteer.launch(launchOptions);
