@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 import type { Browser } from 'puppeteer';
 import fs from 'fs';
+import { execSync } from 'child_process';
 
 interface YouTubeProduct {
   title: string;
@@ -20,6 +21,39 @@ interface YouTubeVideoData {
 
 let browser: Browser | null = null;
 
+function getChromiumPath(): string {
+  const paths = [
+    '/run/current-system/sw/bin/chromium',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/nix/var/nix/profiles/default/bin/chromium',
+  ];
+  
+  // Tenta encontrar via which
+  try {
+    const path = execSync('which chromium || which chromium-browser', { encoding: 'utf-8' }).toString().trim();
+    if (path) {
+      console.log(`[Puppeteer] Found Chromium via 'which': ${path}`);
+      return path;
+    }
+  } catch {
+    // Continue to next method
+  }
+  
+  // Tenta caminhos conhecidos
+  for (const p of paths) {
+    try {
+      execSync(`test -f ${p}`, { stdio: 'ignore' });
+      console.log(`[Puppeteer] Found Chromium at known path: ${p}`);
+      return p;
+    } catch {
+      // Continue to next path
+    }
+  }
+  
+  throw new Error('Chromium não encontrado em nenhum caminho conhecido');
+}
+
 async function getBrowser(): Promise<Browser> {
   // If browser exists but is disconnected, create a new one
   if (browser) {
@@ -34,10 +68,20 @@ async function getBrowser(): Promise<Browser> {
   }
 
   if (!browser) {
-    // Use PUPPETEER_EXECUTABLE_PATH from Railway or fallback to Nix path
-    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/run/current-system/sw/bin/chromium';
-    
-    console.log(`[Puppeteer] Using executable path: ${executablePath}`);
+    // Use PUPPETEER_EXECUTABLE_PATH from env or auto-detect Chromium path
+    let executablePath: string;
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+      executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+      console.log(`[Puppeteer] Using executable path from env: ${executablePath}`);
+    } else {
+      try {
+        executablePath = getChromiumPath();
+        console.log(`[Puppeteer] Using auto-detected Chromium path: ${executablePath}`);
+      } catch (error) {
+        console.error('[Puppeteer] Failed to find Chromium:', error);
+        throw new Error(`Não foi possível encontrar o Chromium. ${error instanceof Error ? error.message : 'Caminho não especificado.'}`);
+      }
+    }
 
     const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
       executablePath: executablePath,
