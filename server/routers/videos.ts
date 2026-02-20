@@ -2,10 +2,41 @@ import { z } from 'zod';
 import { publicProcedure, router } from '../_core/trpc';
 import { extractYouTubeData } from '../youtube-extractor';
 
+// Custom schema for YouTube URLs that accepts various formats
+const youtubeUrlSchema = z.string().refine(
+  (url) => {
+    // Check if it's a valid YouTube URL format
+    const youtubePatterns = [
+      /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//,
+      /^https?:\/\/(www\.)?youtube\.com\/watch\?v=[\w-]+/,
+      /^https?:\/\/(www\.)?youtube\.com\/shorts\/[\w-]+/,
+      /^https?:\/\/youtu\.be\/[\w-]+/,
+    ];
+    
+    // First check if it matches YouTube patterns
+    const isYouTubeUrl = youtubePatterns.some(pattern => pattern.test(url));
+    
+    if (!isYouTubeUrl) {
+      return false;
+    }
+    
+    // Then validate it's a proper URL format
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  {
+    message: 'URL inválida. Forneça uma URL válida do YouTube (youtube.com/watch?v=... ou youtu.be/...)',
+  }
+);
+
 export const videosRouter = router({
   processVideo: publicProcedure
     .input(z.object({
-      url: z.string().url(),
+      url: youtubeUrlSchema,
     }))
     .mutation(async ({ input }) => {
       try {
