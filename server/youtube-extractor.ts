@@ -2,14 +2,6 @@ import puppeteer from 'puppeteer';
 import type { Browser } from 'puppeteer';
 import fs from 'fs';
 
-// Import Chromium for Railway/production environments
-let chromium: any = null;
-try {
-  chromium = require('@sparticuz/chromium');
-} catch {
-  // Chromium package not available, will use system Chromium
-}
-
 interface YouTubeProduct {
   title: string;
   price: string;
@@ -42,64 +34,47 @@ async function getBrowser(): Promise<Browser> {
   }
 
   if (!browser) {
-    const isProduction = process.env.NODE_ENV === 'production';
+    // Define Chromium executable path with fallback order
+    // Priority: CHROMIUM_PATH env var > Railway Nix path > system paths
+    const chromiumPaths = [
+      process.env.CHROMIUM_PATH,
+      '/run/current-system/sw/bin/chromium',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    ].filter(Boolean) as string[];
+
+    // Find the first existing Chromium executable
+    let executablePath: string | undefined;
+    for (const path of chromiumPaths) {
+      try {
+        if (fs.existsSync(path)) {
+          executablePath = path;
+          console.log(`[Puppeteer] Found Chromium at: ${path}`);
+          break;
+        }
+      } catch {
+        // Continue to next path
+      }
+    }
+
     const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
-      headless: "new",
+      headless: true,
+      executablePath: executablePath,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--disable-web-resources',
-        '--disable-extensions',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-features=IsolateOrigins,site-per-process',
+        '--single-process',
       ],
       timeout: 60000, // 60 seconds to launch
     };
 
-    // Use @sparticuz/chromium for Railway/production environments
-    if (isProduction && chromium) {
-      try {
-        // Configure Chromium for Railway
-        launchOptions.executablePath = await chromium.executablePath();
-        launchOptions.args = [
-          ...chromium.args,
-          '--hide-scrollbars',
-          '--disable-web-resources',
-          '--disable-extensions',
-          '--disable-blink-features=AutomationControlled',
-          '--disable-features=IsolateOrigins,site-per-process',
-        ];
-        console.log('[Puppeteer] Using @sparticuz/chromium for Railway');
-      } catch (error) {
-        console.warn('[Puppeteer] Failed to configure @sparticuz/chromium, falling back to system Chromium:', error);
-      }
-    }
-
-    // Fallback: Try to detect Chromium/Chrome executable path (for local development)
-    if (!launchOptions.executablePath) {
-      const possiblePaths = [
-        process.env.CHROMIUM_PATH,
-        '/usr/bin/chromium-browser',
-        '/usr/bin/chromium',
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-      ].filter(Boolean) as string[];
-
-      // Try to find an executable path
-      for (const path of possiblePaths) {
-        try {
-          if (fs.existsSync(path)) {
-            launchOptions.executablePath = path;
-            console.log(`[Puppeteer] Using system Chromium at: ${path}`);
-            break;
-          }
-        } catch {
-          // Continue to next path
-        }
-      }
+    if (!executablePath) {
+      console.warn('[Puppeteer] No Chromium executable found, Puppeteer will try to use bundled Chromium');
     }
 
     try {
@@ -113,6 +88,7 @@ async function getBrowser(): Promise<Browser> {
       console.log('[Puppeteer] Browser launched successfully');
     } catch (error) {
       console.error('[Puppeteer] Failed to launch browser:', error);
+      console.error('[Puppeteer] Launch options:', JSON.stringify(launchOptions, null, 2));
       throw new Error(`Não foi possível iniciar o navegador. Verifique se Chrome/Chromium está instalado.`);
     }
   }
